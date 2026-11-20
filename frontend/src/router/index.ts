@@ -19,6 +19,7 @@ const QualityMon = () => import('@/views/quality_mon/index.vue')
 const CompareJob = () => import('@/views/compare_job/index.vue')
 const ApiService = () => import('@/views/api_service/index.vue')
 const SchedulePlan = () => import('@/views/schedule_plan/index.vue')
+const CrossSourceDaily = () => import('@/views/cross_source_daily/index.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -42,6 +43,7 @@ const router = createRouter({
     { path: '/compare_job', name: 'compare_job', component: CompareJob },
     { path: '/api_service', name: 'api_service', component: ApiService },
     { path: '/schedule_plan', name: 'schedule_plan', component: SchedulePlan },
+    { path: '/cross_source_daily', name: 'cross_source_daily', component: CrossSourceDaily },
   ],
 })
 

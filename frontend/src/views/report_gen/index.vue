@@ -6,6 +6,7 @@
         <p class="page-desc">维护分析报表的模板定义、数据范围、生成周期和多渠道分发配置。</p>
       </div>
       <div class="page-actions">
+        <RouterLink class="btn" data-testid="goto-cross-source" to="/cross_source_daily">跨源日报包</RouterLink>
         <button class="btn primary" data-testid="open-create" type="button" @click="openCreate">登记分析报表</button>
         <button class="btn" data-testid="export" type="button" @click="exportRows">导出报表生成清单</button>
       </div>

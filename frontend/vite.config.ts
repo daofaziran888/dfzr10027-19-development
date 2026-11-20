@@ -23,6 +23,18 @@ export default defineConfig({
       '/api': {
         target: proxyTarget,
         changeOrigin: true,
+        bypass(req) {
+          // 浏览器页面导航的 Accept 含 text/html，交给 SPA 历史路由处理；
+          // 否则 /api_service 这类以 /api 开头的前端路由会被误转发到后端而返回 404。
+          // 但 /export 下载用 window.open 触发、同样带 text/html，必须继续走代理取文件流。
+          // 接口 fetch 不带 text/html，仍正常代理到后端。
+          const isHtmlNavigation = req.headers.accept?.includes('text/html')
+          const isExportDownload = req.url?.includes('/export')
+          if (isHtmlNavigation && !isExportDownload) {
+            return req.url ?? '/'
+          }
+          return undefined
+        },
       },
     },
   },

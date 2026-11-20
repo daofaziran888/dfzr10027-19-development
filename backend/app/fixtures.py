@@ -164,6 +164,123 @@ QUALITY_CHECK_SAMPLES: list[dict] = [
 ]
 
 # ---------------------------------------------------------------------------
+# 9. 跨源日报输入产物（forecast / cohort_rule / data_mart）
+#
+# 约定：每个章节只消费一份「已完成」的完整产物，产物自带实际业务截止日、
+# 来源版本与指标统计周期。实验统计可能迟到，因此实验快照按业务日保留多版，
+# 编制日报时按业务截止日挑选最新的已完成快照。
+# ---------------------------------------------------------------------------
+def _forecast_artifact(cutoff: str, version: str, factor: float) -> dict:
+    """构造一份已完成的预测产物：日粒度 GMV/CVR，含实际值与预测值。"""
+    gmv_points, cvr_points = [], []
+    for point in TREND_POINTS:
+        if point["日期"] > cutoff:
+            continue
+        cvr = point["paid_uv"] / point["total_uv"] if point["total_uv"] else 0.0
+        gmv_points.append({
+            "日期": point["日期"],
+            "实际值": round(point["gmv"], 2),
+            "预测值": round(point["gmv"] * factor, 2),
+        })
+        cvr_points.append({
+            "日期": point["日期"],
+            "实际值": round(cvr, 4),
+            "预测值": round(cvr * factor, 4),
+        })
+    return {
+        "产物编号": f"FORE-DAILY-{cutoff.replace('-', '')}",
+        "来源模块": "forecast",
+        "状态": "已完成",
+        "业务截止日": cutoff,
+        "来源版本": version,
+        "生成时间": f"{cutoff}T07:30:00",
+        "指标序列": [
+            {"指标编号": "METR-GMV", "指标名称": "交易总额(GMV)", "统计周期": "日", "单位": "元", "points": gmv_points},
+            {"指标编号": "METR-CVR", "指标名称": "支付转化率", "统计周期": "日", "单位": "比率", "points": cvr_points},
+        ],
+    }
+
+
+FORECAST_ARTIFACTS: list[dict] = [
+    _forecast_artifact("2026-08-29", "FORE-PKG-20260829", 1.03),
+    _forecast_artifact("2026-08-30", "FORE-PKG-20260830", 1.02),
+]
+
+
+def _cohort_artifact(cutoff: str, version: str) -> dict:
+    """构造一份已完成的分群产物：日粒度活跃指标 + 周粒度规模指标。"""
+    daily_points = []
+    for index, point in enumerate(TREND_POINTS):
+        if point["日期"] > cutoff:
+            continue
+        # 分群活跃用户数：确定性构造，随日期缓慢增长
+        daily_points.append({"日期": point["日期"], "value": 3000 + index * 25})
+
+    weekly_schedule = [
+        ("2026-08-09", 8200),
+        ("2026-08-16", 8600),
+        ("2026-08-23", 9100),
+        ("2026-08-30", 9600),
+    ]
+    weekly_points = [{"日期": day, "value": value} for day, value in weekly_schedule if day <= cutoff]
+
+    return {
+        "产物编号": f"COHO-DAILY-{cutoff.replace('-', '')}",
+        "来源模块": "cohort_rule",
+        "状态": "已完成",
+        "业务截止日": cutoff,
+        "来源版本": version,
+        "生成时间": f"{cutoff}T07:45:00",
+        "指标序列": [
+            {"指标编号": "METR-COHORT-ACTIVE", "指标名称": "分群活跃用户数", "统计周期": "日", "单位": "人", "points": daily_points},
+            {"指标编号": "METR-COHORT-SCALE", "指标名称": "分群规模", "统计周期": "周", "单位": "人", "points": weekly_points},
+        ],
+    }
+
+
+COHORT_ARTIFACTS: list[dict] = [
+    _cohort_artifact("2026-08-29", "COHO-PKG-20260829"),
+    _cohort_artifact("2026-08-30", "COHO-PKG-20260830"),
+]
+
+
+def _experiment_snapshot(cutoff: str, version: str) -> dict:
+    """构造数据集市中一份已完成的实验统计快照（含分组计数与日粒度指标）。"""
+    cvr_points, gmv_points = [], []
+    for point in TREND_POINTS:
+        if point["日期"] > cutoff:
+            continue
+        cvr = point["paid_uv"] / point["total_uv"] if point["total_uv"] else 0.0
+        # 实验流量域只覆盖大盘的一部分，转化率略高于大盘
+        cvr_points.append({"日期": point["日期"], "value": round(cvr * 1.05, 4)})
+        gmv_points.append({"日期": point["日期"], "value": round(point["gmv"] * 0.4, 2)})
+
+    return {
+        "快照编号": f"EXP-SNAPSHOT-{cutoff.replace('-', '')}",
+        "来源模块": "data_mart",
+        "状态": "已完成",
+        "业务截止日": cutoff,
+        "来源版本": version,
+        "生成时间": f"{cutoff}T09:10:00",
+        "实验分组": [
+            {"实验编号": "EXPE-001", "分组": "control", "样本量": 5000, "转化人数": 350, "gmv_sum": 52000.0},
+            {"实验编号": "EXPE-001", "分组": "treatment", "样本量": 5000, "转化人数": 412, "gmv_sum": 61800.0},
+            {"实验编号": "EXPE-002", "分组": "control", "样本量": 8000, "转化人数": 480, "gmv_sum": 72000.0},
+            {"实验编号": "EXPE-002", "分组": "treatment", "样本量": 8000, "转化人数": 528, "gmv_sum": 81000.0},
+        ],
+        "指标序列": [
+            {"指标编号": "METR-CVR", "指标名称": "支付转化率", "统计周期": "日", "单位": "比率", "points": cvr_points},
+            {"指标编号": "METR-GMV", "指标名称": "交易总额(GMV)", "统计周期": "日", "单位": "元", "points": gmv_points},
+        ],
+    }
+
+
+EXPERIMENT_SNAPSHOTS: list[dict] = [
+    _experiment_snapshot("2026-08-29", "MART-SNAP-20260829"),
+    _experiment_snapshot("2026-08-30", "MART-SNAP-20260830"),
+]
+
+# ---------------------------------------------------------------------------
 # 聚合辅助：让 Store 也能引用 fixtures 里的只读数据
 # ---------------------------------------------------------------------------
 FIXTURE_DATASETS: dict[str, list[dict]] = {
@@ -175,4 +292,7 @@ FIXTURE_DATASETS: dict[str, list[dict]] = {
     "_quality_samples": QUALITY_CHECK_SAMPLES,
     "_metric_defs": METRIC_DEFS,
     "_dimensions": DIMENSIONS,
+    "_forecast_artifacts": FORECAST_ARTIFACTS,
+    "_cohort_artifacts": COHORT_ARTIFACTS,
+    "_experiment_snapshots": EXPERIMENT_SNAPSHOTS,
 }
